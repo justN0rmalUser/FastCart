@@ -3,5 +3,11 @@
 		"437219047": "master_left",
     	"569102934": "master_right",
     	"662317420": "other_pc"
+	},
+	
+	"Database": {
+		"db_path": "C:\\Program Files (x86)\\AutoDealer\\AutoDealer\\Database\\AutoDealer.fdb",
+		"db_user": "SYSDBA",
+		"db_password": "masterkey"
 	}
 }

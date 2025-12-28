@@ -1,9 +1,18 @@
 from app import create_app
+from app import dbuppdater
+from app._utils import JSONQueue
+
+import multiprocessing as mp
+
 
 app = create_app()
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    SharedQ = JSONQueue()
+    server = mp.Process(target=app.run, args=('0.0.0.0', 5000, None, True))
+    db_writer = mp.Process(target=dbuppdater.main)
+
 
 # @app.route('/', methods=['GET'])
 # def home():
