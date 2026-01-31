@@ -1,13 +1,12 @@
 from flask import Blueprint, current_app
 from flask import request, jsonify
-from queue_thread import append_to_queue, db_write
+from docs_queue import create_doc
 
 
 bp = Blueprint(
     'main',         # ← Blueprint name (must be unique in the app)
     __name__        # ← Import name (usually __name__)
 )
-HEAD = request.headers
 
 
 def api_key(auth_header: str | None):
@@ -15,21 +14,17 @@ def api_key(auth_header: str | None):
     user = current_app.config['USERS'].get(auth_header)  
     return user
 
+
 @bp.route('/data', methods=['POST'])
 def receive_data():
     # Проверяем API-ключ
-    if not api_key(HEAD.get('Auth')):
+    if not api_key(request.headers.get('Auth')):
         return jsonify({"status": False, "message": "Неизвестный пользователь"}), 401
 
-    append_to_queue(request.get_json())
-    return jsonify({"status": True, "message": "Данные получены, идет обработка"}), 204
-
-@bp.route('/data/check', methods=['GET'])
-def check_dbwork():
-    # Проверяем API-ключ
-    if not api_key(HEAD.get('Auth')):
-        return jsonify({"status": False, "message": "Неизвестный пользователь"}), 401
-
+    if not request.get_json():
+        return jsonify({"status": False, "message": "Пустой запрос"}), 400
     
-
-
+    doc_num = create_doc(request.get_json())
+    if doc_num is not None:
+        return jsonify({"status": True, "message": "Данные получены, обработка успешна", "document_number": doc_num}), 200
+    return jsonify({"status": False, "message": "Ошибка на стороне сервера"}), 500

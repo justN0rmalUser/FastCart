@@ -6,10 +6,7 @@ def create_app():
     app.config.from_file('app\config.json', load=json.load)
 
     # Регистрация маршрутов
-    from app.routes import bp
-    app.register_blueprint(bp)
+    from . import routes
+    app.register_blueprint(routes.bp)
 
     return app
-
-def create_db_conn():
-    

@@ -1,22 +1,6 @@
 import json
-from multiprocessing import Queue
 from pathlib import Path
 import logging as log
-
-
-class JSONQueue:
-    """Очередь, автоматически преобразующая словари в JSON и обратно."""
-    def __init__(self):
-        self.q = Queue()
-    
-    def put(self, data: dict):
-        self.q.put(json.dumps(data))
-    
-    def get(self) -> dict:
-        return json.loads(self.q.get())
-    
-    def close(self):
-        self.q.close()
 
 
 def open_config(fpath: str | Path) -> dict:
@@ -50,6 +34,7 @@ def logger(*, name: str, fpath: Path | str):
         raise
     else:
         return abstract_logger
+
 
 def std(word: str) -> str:
     if isinstance(word, str):
