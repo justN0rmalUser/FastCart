@@ -21,6 +21,9 @@ def logger(*, name: str, fpath: Path | str):
     if not isinstance(fpath, Path):
         fpath = Path(fpath)
 
+    if not fpath.exists():
+        print(fpath.parents)
+
     try:
         abstract_logger = log.getLogger(name)
         abstract_logger.setLevel(log.DEBUG)
