@@ -1,19 +1,65 @@
 import fdb
-from app._utils import logger, open_config
-from app.sqls import document_registry, document_calculation, goods_calculation
+from app._utils import logger, open_config, std
+from app.sqls import document_registry, document_calculation, goods_calculation, find_shopnom_id, new_nom, directory_registry, nom_attribute, shop_price
+from app.fmt import fmt_code, fmt_firm
 
 
 LOG = logger(name="Request", fpath="logs\\req.log")
 ERRDATA = logger(name="Errors", fpath="logs\\corrupt_data.log")
-cfg = open_config("app\config.json")
+cfg = open_config("app\\config.json")
 
 
-def aggregate(jsonData):
-    pass
+def get_sid(cur, con, item):
+    name, firm, code, count, price, firm_name = item
+    name = name[:29]
+    sid = find_shopnom_id(cur, firm=firm, code=code)
+    if sid:
+        LOG.info(f"Здесь есть SID: {sid}")
+        return (sid, count, price)
+    else:
+        dir_reg = directory_registry(cur, con)
+        nom_attribute(cur, con, dir_reg=dir_reg)
+        nom = new_nom(cur, con, dir_reg=dir_reg, name=name, code=code, firm_id=firm, cost=price, margin=65, firm_value=firm_name)
+        shop_price(cur, con, snid=nom, price=price)
+        
+        con.commit()
+        LOG.info(dir_reg)
+        LOG.info(nom)
+        return (nom, count, price)
+    
+
+def filter(material) -> dict:
+    result = {
+        "title": material['name'],
+        "description": material['description']
+    }
+    itemlist = []
+    for item in material["products"]:
+        itemlist.append((
+                str(item["partName"]).replace('*', '').replace('$', '').strip(),
+                fmt_firm.get(std(item["brand"]), item["brand"]),
+                fmt_code.get(std(item["code"]), item["code"]), 
+                float(item["count"].replace(' ', '').replace('\xa0', '')), 
+                float(item["price"].replace(' ', '').replace('\xa0', '')),
+                item["brand"]
+            ))
+        
+    result['productList'] = itemlist
+    return result
+
+def aggregate(cursor, connect, information):
+    result = []
+    for item in information['productList']:
+        fullCell = get_sid(cursor, connect, item)
+        if fullCell:
+            result.append(fullCell)
+        else:
+            name, firm, code, count, price, firm_name = item
+            LOG.warning(f"<{firm, code}> не добавлен, sid не найден!")
+    return tuple(result)
 
 
-def create_connect():
-    # Подключение к базе данных
+def start_db_cycle(response):
     try:
         LOG.debug("Подключение к базе данных")
         con = fdb.connect(  dsn=      cfg["Database"]["db_path"],
@@ -21,31 +67,62 @@ def create_connect():
                             password= cfg["Database"]["db_password"])
     except Exception as e:
         LOG.critical(f"Ошибка подключения к базе: {e}")
-        raise
+        return False, None
     else:
         LOG.info("База данных подключена успешно")
-        return con
-    
-def create_cursor(connection):
+
     # Курсор
     try:
         LOG.debug("Создание курсора")
-        cur = connection.cursor()
-    except Exception as e:
-        LOG.critical(f"Ошибка установки курсора: {e}")
-        raise
+        cur = con.cursor()
+    except Exception as exc:
+        LOG.critical(f"Ошибка установки курсора: {exc}")
+        con.close()
+        return False, None
     else:
         LOG.info("Курсор установлен успешно")
-        return cur
 
-
-def create_doc(response):
     try:
-        con = create_connect()
-        cur = create_cursor(con)
-        assert con and cur, "Ошибка открытия базы данных"
+        LOG.info(response)
+        information = filter(response)
+    except Exception as exc:
+        LOG.critical(f"Ошибка фильтрации: {exc}")
+        con.close()
+        return False, None
+    else:
+        LOG.debug("Фильтрация массива данных успешна!")
+        
+    try:
+        data = {
+            "title": information['title'],
+            "description": information['description']
+        }
+        data['productList'] = aggregate(cur, con, information)
+        assert data['productList'], "Поиск отбросил все данные"
+    except Exception as exc:
+        LOG.critical(f"Ошибка фильтрации: {exc}")
+        con.close()
+        return False, None
+    else:
+        LOG.debug("Поиск и агрегация прошли успешно!")
+
+    try:
+        doc_reg = document_registry(cur)
+        doc_calc = document_calculation(cur, title=data["title"], doc_reg_id=doc_reg)
+        con.commit()
+
+        for n, item in enumerate(data['productList'], start=1):
+            sid, count, price = item
+            LOG.info(item)
+            goods_calculation(cur, calc_id=doc_calc, sin_id=sid, count=count, price=price, pos=n)
+            con.commit()
+
+        con.commit()
     except Exception as exc:
         LOG.error(exc)
-        return None
-    else:
-        aggregate(response)
+        print("problems...")
+        return False, None
+
+    con.close()
+    
+    return True, response['name']
