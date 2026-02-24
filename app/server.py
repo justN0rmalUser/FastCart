@@ -1,9 +1,12 @@
 from flask import current_app
 from flask import request, jsonify
-from app.docs_queue import start_db_cycle
-import json
 from flask import Flask
 from flask_cors import CORS
+
+from app.parse_items import create_list_items
+from app.create_doc import create_document
+import json
+
 
 app = Flask("FastCart")
 CORS(app)
@@ -22,13 +25,18 @@ def receive_data():
     if not api_key(request.headers.get('Auth')):
         return jsonify({"status": False, "message": "Неизвестный пользователь"}), 401
     
-    material = request.get_json()
-    if material:
-        status, doc_title = start_db_cycle(material)
-    else:
-        return jsonify({"status": False, "message": "Bad request"}), 400
+    try:
+        material = request.get_json()
         
-    if status:
-        return jsonify({"status": True, "message": "Данные получены, обработка успешна", "title": doc_title}), 200
-    
-    return jsonify({"status": False, "message": "Ошибка на стороне сервера"}), 500
+        TITLE = material["name"]
+        DESCRIPTION = material["description"]
+        PRODUCTS_LIST = material["products"]
+
+        plist = create_list_items(PRODUCTS_LIST)
+        doc_num = create_document(TITLE, DESCRIPTION, plist)
+    except AssertionError:
+        return jsonify({"status": False, "message": "Bad request"}), 400
+    except Exception as exc:
+        return jsonify({"status": False, "message": f"Ошибка на стороне сервера: {exc}"}), 500
+    else:
+        return jsonify({"status": True, "message": "Данные получены, обработка успешна", "title": TITLE, "doc_num": doc_num}), 200

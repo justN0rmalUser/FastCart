@@ -2,10 +2,10 @@ from datetime import datetime
 
 
 def document_registry(cur):
-    time_stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # time_stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     GET_REG_ID = "SELECT MAX(DOCUMENT_REGISTRY_ID) FROM DOCUMENT_REGISTRY WHERE METATABLE_ID = 42 AND CREATE_USER_ID = 1"
-    CALC_REG = f"""
+    CALC_REG = """
     INSERT INTO DOCUMENT_REGISTRY(
         METATABLE_ID,
         CREATE_USER_ID, 
@@ -17,30 +17,31 @@ def document_registry(cur):
     VALUES(
         42,
         1,
-        '{time_stamp}',
+        ?,
         1,
-        '{time_stamp}',
+        ?,
         26
     )
     """
     try:
-        cur.execute(CALC_REG)
+        cur.execute(CALC_REG, (datetime.now(), datetime.now()))
         
     except Exception as exc:
-        print(exc)
+        print("doc_reg:", exc)
         raise
     else:
         return cur.execute(GET_REG_ID).fetchone()[0]
 
 
-def document_calculation(cur, *, title: str, doc_reg_id: int):
-    time_stamp = datetime.now().strftime("%Y-%m-%d")
+def document_calculation(cur, *, title: str, descript: str, doc_reg_id: int):
+    # time_stamp = datetime.now().strftime("%Y-%m-%d")
     
     GET_CALC_ID = "SELECT MAX(SERVICE_CALCULATION_ITEM_ID) FROM SERVICE_CALCULATION_ITEM WHERE DOCUMENT_REGISTRY_ID = ?"
-    CALC_DOC = f"""
+    CALC_DOC = """
     INSERT INTO SERVICE_CALCULATION_ITEM(
         NAME,
         PRICE_NORM_ID, 
+        NOTES,
         DATE_CREATE,
         DOCUMENT_REGISTRY_ID,
         DOCUMENT_TYPE_ID,
@@ -51,7 +52,8 @@ def document_calculation(cur, *, title: str, doc_reg_id: int):
     VALUES(
         ?,
         6,
-        '{time_stamp}',
+        ?,
+        CURRENT_DATE,
         ?,
         26,
         16,
@@ -61,10 +63,9 @@ def document_calculation(cur, *, title: str, doc_reg_id: int):
     """
 
     try:
-        cur.execute(CALC_DOC, (title, doc_reg_id))
-        
+        cur.execute(CALC_DOC, (title, descript, doc_reg_id))
     except Exception as exc:
-        print(exc)
+        print("doc_calc:", exc)
         raise
     else:
         return cur.execute(GET_CALC_ID, (doc_reg_id, )).fetchone()[0]
@@ -93,12 +94,9 @@ def goods_calculation (cur, *, calc_id: int, sin_id: int, count: float, price: f
     """
     try:
         cur.execute(CALC_DOC_GOODS, (calc_id, sin_id, count, price, pos))
-        
     except Exception as exc:
-        print(exc)
-        return False
-    else:
-        return True
+        print("goods:", exc)
+        raise
     
 
 def find_shopnom_id(cur, *, firm: int, code: str):
@@ -115,10 +113,10 @@ def find_shopnom_id(cur, *, firm: int, code: str):
         return sid
 
 
-def directory_registry(cur, con):
-    time_stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def directory_registry(cur):
+    # time_stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     GET_REG_ID = "SELECT MAX(DIRECTORY_REGISTRY_ID) FROM DIRECTORY_REGISTRY WHERE METATABLE_ID = 13 AND CREATE_USER_ID = 1"
-    CALC_REG = f"""
+    CALC_REG = """
     INSERT INTO DIRECTORY_REGISTRY(
         METATABLE_ID,
         CREATE_USER_ID, 
@@ -129,25 +127,26 @@ def directory_registry(cur, con):
     VALUES(
         13,
         1,
-        '{time_stamp}',
+        ?,
         1,
-        '{time_stamp}'
+        ?
     )
     """
     try:
-        cur.execute(CALC_REG)
-        con.commit()
+        cur.execute(CALC_REG, (datetime.now(), datetime.now()))
+        
     except Exception as exc:
-        print(exc)
+        print("dir_reg:", exc)
         raise
     else:
         return cur.execute(GET_REG_ID).fetchone()[0]
 
-def new_nom(cur, con, *, dir_reg, name: str, code, firm_id, cost, margin, firm_value):
-    search_text = f"{name.upper()}*{name.upper()}**{firm_value.upper()}"
-    search_nums = f"{code}**{code}"
+def new_nom(cur, *, dir_reg, name: str, code, firm_id, cost, margin, firm_value):
+    search_text = f"{name.upper().replace(' ', '')}*{name.upper().replace(' ', '')}**{firm_value.upper().replace(' ', '')}"
+    search_nums = f"{code.replace(' ', '')}**{code.replace(' ', '')}"
     SHOP_NEW = """
     INSERT INTO SHOP_NOMENCLATURE(
+        SHOP_NOMENCLATURE_ID,
         DIRECTORY_REGISTRY_ID,
         SHOP_NOMENCLATURE_TREE_ID,
         SHORTNAME,
@@ -169,6 +168,7 @@ def new_nom(cur, con, *, dir_reg, name: str, code, firm_id, cost, margin, firm_v
         SEARCH_VALUE_NUMBER_MANUFACTURE
     )
     VALUES(
+        ?,
         ?, 
         82,
         ?,
@@ -191,29 +191,26 @@ def new_nom(cur, con, *, dir_reg, name: str, code, firm_id, cost, margin, firm_v
     )
     """
     try:
-        cur.execute(SHOP_NEW, (dir_reg, name, name, code, code, firm_id, cost, margin, search_text, search_nums, code))
-        con.commit()
+        gen = cur.execute("SELECT NEXT VALUE FOR GEN_SHOP_NOMENCLATURE FROM RDB$DATABASE").fetchone()[0]
+        cur.execute(SHOP_NEW, (gen, dir_reg, name, name, code, code, firm_id, cost, margin, search_text, search_nums, code))
+        print(search_text, search_nums)
     except Exception as exc:
         print(exc)
         raise
-
-def get_shop_num(cur, name: str, code, firm_value):
-    search_text = f"{name.upper()}*{name.upper()}**{firm_value.upper()}"
-    search_nums = f"{code}**{code}"
-    GET_SHOP = "SELECT MAX(SHOP_NOMENCLATURE_ID) FROM SHOP_NOMENCLATURE WHERE SEARCH_VALUE_TEXT = ? AND SEARCH_VALUE_NUMS = ?"
-    return cur.execute(GET_SHOP, (search_text, search_nums)).fetchone()[0]
+    else:
+        return gen
 
 
-def nom_attribute(cur, con, *, dir_reg):
+
+def nom_attribute(cur, *, dir_reg):
     ATTR = "INSERT INTO SHOP_NOMENCLATURE_ATTRIBUTE(DIRECTORY_REGISTRY_ID) VALUES(?)"
     try:
         cur.execute(ATTR, (dir_reg, ))
-        con.commit()
     except Exception as exc:
         print(exc)
         raise
 
-def shop_price(cur, con, *, snid, price):
+def shop_price(cur, *, snid, price):
     SHOP_PRICE = """
     INSERT INTO SHOP_PRICE(
         SHOP_PRICE_LIST_ID,
@@ -229,7 +226,6 @@ def shop_price(cur, con, *, snid, price):
     )"""
     try:
         cur.execute(SHOP_PRICE, (snid, price))
-        con.commit()
     except Exception as exc:
         print(exc)
         raise
