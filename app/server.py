@@ -18,6 +18,9 @@ def api_key(auth_header: str | None):
     user = current_app.config['USERS'].get(auth_header)  
     return user
 
+@app.route('/', methods=['GET'])
+def home():
+    return "RESPONSE_123", 200
 
 @app.route('/data', methods=['POST'])
 def receive_data():

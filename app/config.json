@@ -6,9 +6,8 @@
 	},
 	
 	"Database": {
-		"db_path": "C:\\Users\\user2\\Desktop\\AutoDealer.fdb",
+		"db_path": "C:\\Program Files (x86)\\AutoDealer\\AutoDealer\\Database\\AutoDealer.fdb",
 		"db_user": "SYSDBA",
-		"db_password": "masterkey",
-		"True_bd": "C:\\Program Files (x86)\\AutoDealer\\AutoDealer\\Database\\AutoDealer.fdb"
+		"db_password": "masterkey"
 	}
 }

@@ -1,5 +1,5 @@
 import fdb
-from app.utils._utils import logger, open_config, std
+from app.utils._utils import logger, open_config, std, store_attribute, five_round
 from app.utils.sqls import (
     find_shopnom_id, 
     new_nom, 
@@ -27,7 +27,7 @@ def get_items(items_list, *, cur):
         seek_code = fmt_code.get(std(code))
         
         count = float(item["count"].replace(' ', '').replace('\xa0', ''))
-        price = float(item["price"].replace(' ', '').replace('\xa0', ''))
+        price = five_round(float(item["price"].replace(' ', '').replace('\xa0', '')))
         
         match str(int(bool(seek_firm)))+str(int(bool(seek_code))):
             case "11":
@@ -70,9 +70,10 @@ def get_items(items_list, *, cur):
 def new_items(ns_items_list, *, cur, trans):
     try:
         for item in ns_items_list:
+            shop_tree = store_attribute(item["name"])
             dir_reg = directory_registry(cur)
             nom_attribute(cur, dir_reg=dir_reg)
-            nom = new_nom(cur, dir_reg=dir_reg, name=item["name"], code=item["code"], firm_id=item["firm_id"], cost=item["default_price"], margin=65, firm_value=item["firm"])
+            nom = new_nom(cur, dir_reg=dir_reg, name=item["name"], shop_tree=shop_tree, code=item["code"], firm_id=item["firm_id"], cost=item["default_price"], margin=65, firm_value=item["firm"])
             shop_price(cur, snid=nom, price=item["default_price"])
     except Exception as exc:
         ItemLOG.critical(exc)
