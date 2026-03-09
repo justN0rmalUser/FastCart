@@ -141,7 +141,7 @@ def directory_registry(cur):
     else:
         return cur.execute(GET_REG_ID).fetchone()[0]
 
-def new_nom(cur, *, dir_reg, name: str, code, firm_id, cost, margin, firm_value):
+def new_nom(cur, *, dir_reg, name: str, shop_tree: int, code, firm_id, cost, margin, firm_value):
     search_text = f"{name.upper().replace(' ', '')}*{name.upper().replace(' ', '')}**{firm_value.upper().replace(' ', '')}"
     search_nums = f"{code.replace(' ', '')}**{code.replace(' ', '')}"
     SHOP_NEW = """
@@ -170,7 +170,7 @@ def new_nom(cur, *, dir_reg, name: str, code, firm_id, cost, margin, firm_value)
     VALUES(
         ?,
         ?, 
-        82,
+        ?,
         ?,
         ?,
         ?,
@@ -192,7 +192,7 @@ def new_nom(cur, *, dir_reg, name: str, code, firm_id, cost, margin, firm_value)
     """
     try:
         gen = cur.execute("SELECT NEXT VALUE FOR GEN_SHOP_NOMENCLATURE FROM RDB$DATABASE").fetchone()[0]
-        cur.execute(SHOP_NEW, (gen, dir_reg, name, name, code, code, firm_id, cost, margin, search_text, search_nums, code))
+        cur.execute(SHOP_NEW, (gen, dir_reg, shop_tree, name, name, code, code, firm_id, cost, margin, search_text, search_nums, code))
         print(search_text, search_nums)
     except Exception as exc:
         print(exc)

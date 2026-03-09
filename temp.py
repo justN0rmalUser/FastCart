@@ -1,165 +1,84 @@
-# import fdb
-# from app.utils._utils import logger, open_config, std
-# from app.utils.sqls import document_registry, document_calculation, goods_calculation, find_shopnom_id, new_nom, directory_registry, nom_attribute
-# from app.utils.fmt import fmt_code, fmt_firm
+from itertools import product
+import Levenshtein
+from app.utils.tmp import comb1, comb2, comb3, comb4
 
+def store_attribute(text: str):
+    # Подготовка текста
+    text = text.lower().strip()
+    for el in "\\|/-;:":
+        text.replace(el, '')
 
-# LOG = logger(name="Request", fpath="logs\\req.log")
-# ERRDATA = logger(name="Errors", fpath="logs\\corrupt_data.log")
-# cfg = open_config("app\\config.json")
+    word_list = text.split()[:4]
+    twos_list = [iter_to_str(element) for element in delete_copyies(list(product(word_list, repeat=2)), 2)]
+    thirds_list = [iter_to_str(element) for element in delete_copyies(list(product(word_list, repeat=3)), 3)]
+    fourths_list = [iter_to_str(element) for element in delete_copyies(list(product(word_list, repeat=4)), 4)]
+    print(word_list)
 
+    # Поиск соответствий
+    one_good_ids = check_ratio(word_list, comb1, 0.80)
+    two_good_ids = check_ratio(twos_list, comb2, 0.75)
+    three_good_ids = check_ratio(thirds_list, comb3, 0.70)
+    four_good_ids = check_ratio(fourths_list, comb4, 0.65)
 
-# def get_sid(cur, con, item):
-#     name, firm, code, count, price, firm_name = item
-#     name = name[:29]
-#     sid = find_shopnom_id(cur, firm=firm, code=code)
-#     if sid:
-#         LOG.info(f"Здесь есть SID: {sid}")
-#         return (sid, count, price)
-#     else:
-#         dir_reg = directory_registry(cur)
-#         LOG.info(dir_reg)
-#         nom_attribute(cur, dir_reg=dir_reg)
-#         nom = new_nom(cur, dir_reg=dir_reg, name=name, code=code, firm_id=firm, cost=price, margin=65, firm_value=firm_name)
+    temp_elements = [g[1] for g in sorted((one_good_ids, two_good_ids, three_good_ids, four_good_ids), key=lambda item: item[0], reverse=True)]
+    print(temp_elements)
+    all_elements = []
+    for el in temp_elements:
+        all_elements.extend(el)
+
+    max_matches_count = 0
+    max_matches = None
+
+    print(all_elements)
+    for el in all_elements:
+        if all_elements.count(el) > max_matches_count:
+            max_matches_count = all_elements.count(el)
+            max_matches = el
         
-#         con.commit()
-#         return (nom, count, price)
+    return max_matches
+
+        
+def delete_copyies(lst, couple_count):
+    death_note = []
+    for i in range(len(lst)):
+        if len(set(lst[i])) < couple_count:
+            death_note.append(i)
+        
+    for enemy in sorted(death_note, reverse=True):
+        del lst[enemy]
     
+    return tuple(lst)
 
-# def filter(material) -> dict:
-#     result = {
-#         "title": material['name'],
-#         "description": material['description']
-#     }
-#     itemlist = []
-#     for item in material["products"]:
-#         itemlist.append((
-#                 str(item["partName"]).replace('*', '').replace('$', '').strip(),
-#                 fmt_firm.get(std(item["brand"]), ''),
-#                 fmt_code.get(std(item["code"]), item["code"]), 
-#                 float(item["count"].replace(' ', '').replace('\xa0', '')), 
-#                 float(item["price"].replace(' ', '').replace('\xa0', '')),
-#                 item["brand"]
-#             ))
-        
-#     result['productList'] = itemlist
-#     return result
-
-# def aggregate(cursor, connect, information):
-#     result = []
-#     for item in information['productList']:
-#         fullCell = get_sid(cursor, connect, item)
-#         if fullCell:
-#             result.append(fullCell)
-#         else:
-#             name, firm, code, count, price, firm_name = item
-#             LOG.warning(f"<{firm, code}> не добавлен, sid не найден!")
-#     return tuple(result)
+def iter_to_str(iterator):
+    res = ""
+    for e in iterator:
+        res+=str(e)
+        res+=' '
+    return res.strip()
 
 
-# def start_db_cycle(response):
-#     try:
-#         LOG.debug("Подключение к базе данных")
-#         con = fdb.connect(  dsn=      cfg["Database"]["db_path"],
-#                             user=     cfg["Database"]["db_user"], 
-#                             password= cfg["Database"]["db_password"])
-#     except Exception as e:
-#         LOG.critical(f"Ошибка подключения к базе: {e}")
-#         return False, None
-#     else:
-#         LOG.info("База данных подключена успешно")
+def check_ratio(names, pattern, good_percent):
+    max_score = 0.0
+    second_score = 0.0
+    match = []
+    for variant in names:
+        # print(variant)
+        for key_word in pattern:
+            # print(key_word)
+            ratio = Levenshtein.ratio(key_word, variant)
 
-#     # Курсор
-#     try:
-#         LOG.debug("Создание курсора")
-#         cur = con.cursor()
-#     except Exception as exc:
-#         LOG.critical(f"Ошибка установки курсора: {exc}")
-#         con.close()
-#         return False, None
-#     else:
-#         LOG.info("Курсор установлен успешно")
+            if ratio >= good_percent:
+                if max_score < ratio:
+                    print(ratio, pattern[key_word])
 
-#     try:
-#         information = filter(response)
-#     except Exception as exc:
-#         LOG.critical(f"Ошибка фильтрации: {exc}")
-#         con.close()
-#         return False, None
-#     else:
-#         LOG.debug("Фильтрация массива данных успешна!")
-        
-#     try:
-#         data = {
-#             "title": information['title'],
-#             "description": information['description']
-#         }
-#         data['productList'] = aggregate(cur, con, information)
-#         assert data['productList'], "Поиск отбросил все данные"
-#     except Exception as exc:
-#         LOG.critical(f"Ошибка фильтрации: {exc}")
-#         con.close()
-#         return False, None
-#     else:
-#         LOG.debug("Поиск и агрегация прошли успешно!")
-
-#     try:
-#         doc_reg = document_registry(cur)
-#         doc_calc = document_calculation(cur, title=data["title"], doc_reg_id=doc_reg)
-#         con.commit()
-
-#         for n, item in enumerate(data['productList'], start=1):
-#             sid, count, price = item
-#             LOG.info(item)
-#             goods_calculation(cur, calc_id=doc_calc, sin_id=sid, count=count, price=price, pos=n)
-#             con.commit()
-
-#         con.commit()
-#     except Exception as exc:
-#         LOG.error(exc)
-#         print("problems...")
-#         return False, None
-
-#     con.close()
-    
-#     return True, response['name']
-
-
-# input_data = {
-#     'description': '',
-#     'name': 'документ',
-#     'products':
-#         [
-#             {
-#                 'brand': 'Riginal',
-#                 'code': 'RG212141006001',
-#                 'count': '1',
-#                 'id': 'Riginal|RG212141006001|1|7551.39',
-#                 'partName': 'Комплект ГРМ ВАЗ-21214,2123 (цепь., звезд., '
-#                         'натяж., успок., башмак )',
-#                 'price': '7551.39'
-#             },
-#             {
-#                 'brand': 'VAG',
-#                 'code': '03L198119D',
-#                 'count': '1',
-#                 'id': 'VAG|03L198119D|1|46818.45',
-#                 'partName': 'Комплект ремня ГРМ',
-#                 'price': '46818.45'
-#             },
-#             {
-#                 'brand': 'Victor Reinz',
-#                 'code': '81-40538-00',
-#                 'count': '2',
-#                 'id': 'Victor Reinz|81-40538-00|2|1482.00',
-#                 'partName': 'Сальник распределительного вала',
-#                 'price': '1482.00'
-#             }
-#         ]
-#     }
-
-# start_db_cycle(input_data)
-
-print(str(int(bool("0")))+str(int(bool(None))))
-from datetime import datetime
-print(datetime.now().date())
+                    match.insert(0, pattern[key_word])
+                    max_score = ratio
+                elif max_score >= ratio >= second_score:
+                    print(ratio, pattern[key_word])
+                    
+                    match.insert(1, pattern[key_word])
+                    second_score = ratio
+                else:
+                    match.append(pattern[key_word])
+                    
+    return max_score, match[:3]
